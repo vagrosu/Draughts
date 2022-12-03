@@ -9,3 +9,10 @@ install_manifest.txt
 compile_commands.json
 CTestTestfile.cmake
 _deps
+/.idea/vcs.xml
+/CMakeLists.txt
+/cmake-build-debug/.cmake/api/v1/reply/codemodel-v2-d99fa7c455f9adcaa002.json
+/cmake-build-debug/.cmake/api/v1/reply/index-2022-12-03T17-13-19-0963.json
+/.idea/misc.xml
+/cmake-build-debug/.cmake/api/v1/reply/target-Proiect-Debug-5d26e399595833480b1c.json
+/.idea/workspace.xml
