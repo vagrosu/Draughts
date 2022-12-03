@@ -16,3 +16,6 @@ _deps
 /.idea/misc.xml
 /cmake-build-debug/.cmake/api/v1/reply/target-Proiect-Debug-5d26e399595833480b1c.json
 /.idea/workspace.xml
+/client/client
+/client/client.o
+/server/server
