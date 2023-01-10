@@ -1,4 +1,4 @@
-//g++ -c client.cpp && g++ client.o -o client -lsfml-graphics -lsfml-window -lsfml-system && ./client 0 2728
+//g++ -c client.cpp && g++ client.o -o client -lsfml-graphics -lsfml-window -lsfml-system && ./client 0 2927
 //gcc server.cpp -o server && ./server
 
 #include <SFML/Graphics.hpp>
@@ -7,11 +7,6 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <string.h>
-//#include <sys/types.h>
-//#include <errno.h>
-//#include <stdio.h>
-//#include <stdlib.h>
-//#include <netdb.h>
 
 //Board Square types
 #define EMPTY_SQUARE 0
@@ -25,15 +20,27 @@
 #define WINDOW_WIDTH 1280
 #define WINDOW_HEIGHT 960
 #define WINDOW_COLOR Black
-#define MAIN_MENU 0
-#define PLAYING 1
+#define MODAL_WIDTH 0.87*WINDOW_WIDTH
+#define MODAL_HEIGHT 0.87*WINDOW_HEIGHT
+#define MODAL_COLOR sf::Color(230, 230, 230)
+#define LOGIN_MENU 0
+#define MAIN_MENU 1
+#define PLAYING 2
 
-//Server communication
-#define MESSAGE_SIZE 500
+//Char sizes
+#define MESSAGE_SIZE 1000
+#define PLAYER_NAME_SIZE 32
+#define ERROR_MESSAGE_SIZE 101
+#define MAX_ACTIVE_PLAYERS 100
 
-//Move Turn
-#define PLAYER1 1
-#define PLAYER2 2
+//Move Turn/Winner
+#define NO_WINNER -1
+#define PLAYER1 0
+#define PLAYER2 1
+#define DRAW 2
+
+//Main Menu
+#define MAX_CARDS 10
 
 //Board
 #define BOARD_SIZE 8
@@ -46,27 +53,41 @@
 //Pieces
 #define PIECE_SIZE (SQUARE_SIZE-35)/2
 #define MOVE_OPTION_SIZE (SQUARE_SIZE-70)/2
-#define PIECE_COLOR1 sf::Color::Green
-#define KING_COLOR1 sf::Color::Magenta
-#define PIECE_COLOR2 sf::Color::Red
-#define KING_COLOR2 sf::Color::Cyan
+#define PIECE_COLOR1 sf::Color(0, 255, 0)
+#define SELECTED_PIECE_COLOR1 sf::Color(51, 153, 51)
+#define KING_COLOR1 PIECE_COLOR1
+#define SELECTED_KING_COLOR1 SELECTED_PIECE_COLOR1
+#define PIECE_COLOR2 sf::Color(255, 0, 0)
+#define SELECTED_PIECE_COLOR2 sf::Color(179, 0, 0)
+#define KING_COLOR2 PIECE_COLOR2
+#define SELECTED_KING_COLOR2 SELECTED_PIECE_COLOR2
 #define MOVE_OPTION_COLOR sf::Color::Blue
+#define KING_OUTLINE_COLOR sf::Color::Black
 
 
 struct ServerData {
     int port;
-    char message[100];		// mesajul trimis
-    unsigned int messageLength=0;
-    unsigned int length=0;
+    int sd;			// descriptorul de socket
+    struct sockaddr_in serverData;	// structura folosita pentru conectare
 };
 
-struct WindowProps {
+struct AppProps {
     bool mouseIsPressed = false;
     bool mouseIsMoving = false;
-    int appMenu = PLAYING;
-    int selectedPieceIndex = -1;
-    int turn = PLAYER1;
-    sf::Vector2f mousePos; //Mouse position
+    int appMenu = LOGIN_MENU;
+    sf::Vector2f mousePos;
+    sf::Texture backgroundTexture;
+    sf::Font arialMedium;
+    sf::RectangleShape background;
+    sf::RectangleShape modal;
+    sf::RectangleShape errorBackground;
+    sf::Text errorText;
+    sf::Text modalTitle;
+    char playerName[PLAYER_NAME_SIZE] = {'\0'};
+    char enemyName[PLAYER_NAME_SIZE] = {'\0'};
+    char error[ERROR_MESSAGE_SIZE] = {'\0'};
+    int errorTime = 0;
+    int wait = 0;
 };
 
 struct BoardMatrix {
@@ -77,62 +98,110 @@ struct BoardMatrix {
     sf::CircleShape moveOption;
 };
 
-struct {
+struct LoginMenuProps {
+    #define USERNAME 0
+    #define PASSWORD 1
+    #define CONFIRM_PASSWORD 2
+    bool isLoginActive = true;
+    int activeInputField = USERNAME;
+    sf::Text nameText;
+    sf::RectangleShape nameInputBackground;
+    sf::Text nameInput;
+    sf::Text passwordText;
+    sf::RectangleShape passwordInputBackground;
+    sf::Text passwordInput;
+    char password[PLAYER_NAME_SIZE] = {'\0'};
+    sf::Text confirmText;
+    sf::RectangleShape confirmInputBackground;
+    sf::Text confirmInput;
+    char confirmPassword[PLAYER_NAME_SIZE] = {'\0'};
+    sf::RectangleShape firstButton;
+    sf::Text firstButtonText;
+    sf::RectangleShape secondButton;
+    sf::Text secondButtonText;
+};
+
+struct MainMenuProps {
+    bool isLeaderboard = false;
+    sf::RectangleShape playersBackground;
+    sf::RectangleShape playerCard[MAX_CARDS];
+    sf::Text playerText[MAX_CARDS];
+    char players[MAX_ACTIVE_PLAYERS][PLAYER_NAME_SIZE];
+    sf::Text playerScore[MAX_CARDS];
+    char scores[MAX_ACTIVE_PLAYERS][10];
+    int playersCount = 0;
+    sf::RectangleShape button;
+    sf::Text buttonText;
+    struct {
+        sf::RectangleShape challengeBackground;
+        sf::Text playerName;
+        sf::Text title;
+        sf::RectangleShape acceptButton;
+        sf::Text accept;
+        sf::RectangleShape declineButton;
+        sf::Text decline;
+        bool isModalOpen = false;
+    } challenge;
+    struct {
+        sf::RectangleShape challengeBackground;
+        sf::Text playerName;
+        sf::Text title;
+        bool isModalOpen = false;
+    }response;
+
+};
+
+struct PlayingMenuProps {
+    int gameId;
+    int selectedPieceIndex = -1;
+    int turn = PLAYER1;
+    int winner = NO_WINNER;
+    int playerColor = PLAYER1;
     BoardMatrix boardMatrix[BOARD_SIZE][BOARD_SIZE];
-    WindowProps appProps; //Props for graphics
-    ServerData serverData;
+    struct {
+        sf::Text turnMessage;
+        sf::RectangleShape topBackground;
+        sf::RectangleShape quitButton;
+        sf::Text quitButtonText;
+        sf::RectangleShape piecesLeft;
+        sf::Text piecesLeftText;
+    } info;
+};
+
+struct {
+    AppProps appProps;
+    LoginMenuProps loginMenu;
+    MainMenuProps mainMenu;
+    PlayingMenuProps playingMenu;
+    ServerData server;
 }code;
 
 #include "main.h"
 
-int main(int argc, char *argv[]) {
-    //FOR TESTING TODO: Delete
-    for(int i = 0; i < BOARD_SIZE; i++) {
-        for(int j = 0; j < BOARD_SIZE; j++) {
-            if(i <= 2) {
-//                if((i+j) % 2 != 0) {
-//                    code.boardMatrix[i][j].type = PLAYER2_SQUARE;
-//                }
-            } else if (i >= 5) {
-                if ((i+j) % 2 != 0) {
-                    code.boardMatrix[i][j].type = PLAYER1_SQUARE;
-                }
-            }
-        }
-    }
-    code.boardMatrix[4][5].type = PLAYER2_SQUARE;
-    code.boardMatrix[3][4].type = PLAYER2_SQUARE;
-    //END OF TESTING
-
-    int socketDescriptor;			// descriptorul de socket
-    struct sockaddr_in server;	// structura folosita pentru conectare
-
-
-    if (argc != 3)
-    {
+void initConnection(int argc, char *argv[]) {
+    if (argc != 3) {
         printf ("Sintaxa: %s <adresa_server> <port>\n", argv[0]);
-        return -1;
+        exit(-1);
     }
-
-    code.serverData.port = atoi (argv[2]);
-
+    code.server.port = atoi(argv[2]);
     /* cream socketul */
-    if ((socketDescriptor = socket (AF_INET, SOCK_DGRAM, 0)) == -1)
-    {
-        perror ("Eroare la socket().\n");
-        return errno;
+    if ((code.server.sd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+        perror ("[client] Eroare la socket().\n");
+        exit(errno);
     }
-
     /* umplem structura folosita pentru realizarea dialogului cu serverul */
-    /* familia socket-ului */
-    server.sin_family = AF_INET;
-    /* adresa IP a serverului */
-    server.sin_addr.s_addr = inet_addr(argv[1]);
-    /* portul de conectare */
-    server.sin_port = htons (code.serverData.port);
+    code.server.serverData.sin_family = AF_INET; //familia socket-ului
+    code.server.serverData.sin_addr.s_addr = inet_addr(argv[1]); //adresa IP a serverului
+    code.server.serverData.sin_port = htons(code.server.port); //portul de conectare
+    if (connect(code.server.sd, (struct sockaddr *) &code.server.serverData,sizeof (struct sockaddr)) == -1)
+    {
+        perror ("[client]Eroare la connect().\n");
+        exit(errno);
+    }
+}
 
-    appWindow(server, socketDescriptor);
-    close(socketDescriptor);
-
+int main(int argc, char *argv[]) {
+    initConnection(argc, argv);
+    appWindow();
     return 0;
 }
